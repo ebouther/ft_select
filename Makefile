@@ -2,9 +2,9 @@
 NAME = ft_select
 
 CC = gcc
-CFLAGS = -Wall -Wextra -Werror
+CFLAGS = -Wall -Wextra -Werror -g
 IFLAGS = -I ./inc/ -I ./libft/includes
-LFLAGS = -L ./libft/ -lft
+LFLAGS = -L ./libft/ -lft -ltermcap
 
 LIBFT = ./libft/libft.a
 
