@@ -5,9 +5,21 @@ int	ft_putc(int c)
 	return (write(1, &c, 1));
 }
 
-inline void	clr_screen(t_termcap *tcap)
+void	clr_screen(t_termcap *tcap)
 {
 	tputs(tcap->cl_string, 1, ft_putc);
+}
+
+void	ft_print(char *str, enum e_mode mode)
+{
+	if (mode == SELECT)
+	{
+		tputs(tgetstr("us", NULL), 1, ft_putc);
+		ft_putendl(str);
+		tputs(tgetstr("ue", NULL), 1, ft_putc);
+	}
+	else
+		ft_putendl(str);
 }
 
 void	set_tcap(t_termcap *tcap)
@@ -25,37 +37,135 @@ void	set_tcap(t_termcap *tcap)
 	tcap->UP = tgetstr("up", 0);
 }
 
-void	fill_list(t_list **lst, char **argv)
+t_list	*fill_list(t_list **lst, char **argv)
 {
 	int		i;
+	char	sw;
 	t_elem	e;
-	
+	t_list	*previous;
+	t_list	*end;
+	t_list	*tmp;
+
+	previous = NULL;
+	end = NULL;
+	tmp = NULL;
 	e.mode = NORMAL;
 	i = 0;
+	sw = 0;
 	while (argv[i])
 		i++;
 	while (--i > 0)
 	{
 		e.text = argv[i];
-		ft_lstadd(lst, ft_lstnew((void *)&e, sizeof(t_elem)));
+		e.previous = NULL;
+		if (tmp != NULL)
+			previous = tmp;
+		ft_lstadd(lst, tmp = ft_lstnew((void *)&e, sizeof(t_elem)));
+		if (sw == 0)
+		{
+			end = tmp;
+			sw = 1;
+		}
+		if (previous != NULL)
+			((t_elem *)(previous->content))->previous = tmp;
+		previous = *lst;
 	}
+	return (end);
 }
 
-void	disp_menu(t_termcap *tcap, char **argv)
+static void	ft_quit_menu(t_list *lst)
 {
-	t_list	*lst;
+	t_list	*tmp;
 
-	lst = NULL;
-	fill_list(&lst, argv);
 	while (lst)
 	{
-		
+		tmp = lst;
 		lst = lst->next;
+		free(tmp->content);
+		tmp->content = NULL;
+		free(tmp);
+		tmp = NULL;
 	}
-	(void)tcap;
 }
 
-void	init_term(t_termcap *tcap)
+static void	disp_menu(t_list *lst)
+{
+	while (lst)
+	{
+		ft_print(((t_elem *)(lst->content))->text,
+			((t_elem *)(lst->content))->mode);
+		lst = lst->next;
+	}
+}
+
+static void	ft_move_right(t_list *begin, t_list **cur_elem, t_termcap *tcap)
+{
+	if (((t_elem *)((*cur_elem)->content))->mode == SELECT)
+		((t_elem *)((*cur_elem)->content))->mode = NORMAL;
+	if ((*cur_elem)->next != NULL)
+		(*cur_elem) = (*cur_elem)->next;
+	else
+		(*cur_elem) = begin;
+	((t_elem *)((*cur_elem)->content))->mode = SELECT;
+	clr_screen(tcap);
+	disp_menu(begin);
+}
+
+static void	ft_move_left(t_list *end, t_list *begin, t_list **cur_elem,
+						t_termcap *tcap)
+{
+	if (((t_elem *)((*cur_elem)->content))->mode == SELECT)
+		((t_elem *)((*cur_elem)->content))->mode = NORMAL;
+	if (((t_elem *)((*cur_elem)->content))->previous != NULL)
+		(*cur_elem) = ((t_elem *)((*cur_elem)->content))->previous;
+	else
+		(*cur_elem) = end;
+	((t_elem *)((*cur_elem)->content))->mode = SELECT;
+	clr_screen(tcap);
+	disp_menu(begin);
+}
+
+static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
+{
+	char	buf[3];
+	t_list	*cur_elem;
+
+	cur_elem = begin;
+	while (1)
+	{
+		tputs(tgetstr("rs", NULL), 1, ft_putc);
+		ft_bzero(buf, sizeof(buf));
+		read(0, buf, sizeof(buf));
+		if ((unsigned int)(buf[0]) == 27)
+		{
+			if (((unsigned int)buf[2]) == RIGHT_KEY)
+				ft_move_right(begin, &cur_elem, tcap);
+			else if (((unsigned int)buf[2]) == LEFT_KEY)
+				ft_move_left(end, begin, &cur_elem, tcap);
+			else if (buf[2] == 0)
+			{
+				ft_quit_menu(begin);
+				break ;
+			}
+		}
+	}
+}
+
+void	init_menu(t_termcap *tcap, char **argv)
+{
+	t_list	*lst;
+	t_list	*end;
+
+	lst = NULL;
+	end = fill_list(&lst, argv);
+	clr_screen(tcap);
+	disp_menu(lst);
+	(void)tcap;
+	tputs(tgetstr("ks", NULL), 1, ft_putc);
+	ft_get_user_input(lst, end, tcap);
+}
+
+void	init_term(t_termcap *tcap, struct termios *term)
 {
 	char	*termtype;
 	int		success;
@@ -71,19 +181,27 @@ void	init_term(t_termcap *tcap)
 		ft_printf("Terminal type `%s' is not defined.\n", termtype);
 		exit(-1);
 	}
+	if (tcgetattr(0, term) == -1)
+		exit(-1);
+	term->c_lflag &= ~(ICANON);
+	//term->c_lflag &= ~(ECHO);
+	term->c_cc[VMIN] = 1;
+	term->c_cc[VTIME] = 0;
+	tcsetattr(0, 0, term);
 	set_tcap(tcap);
 }
 
 int		main(int argc, char **argv)
 {
-	t_termcap	tcap;
+	t_termcap		tcap;
+	struct termios	term;
 
 	if (argc > 1)
 	{
 		if (isatty(1))
 		{
-			init_term(&tcap);
-			disp_menu(&tcap, argv);
+			init_term(&tcap, &term);
+			init_menu(&tcap, argv);
 		}
 		else
 			ft_putstr("Not a valid terminal type device.\n");
