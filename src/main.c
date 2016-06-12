@@ -12,11 +12,25 @@ void	clr_screen(t_termcap *tcap)
 
 void	ft_print(char *str, enum e_mode mode)
 {
-	if (mode == SELECT)
+	if (mode == HOVER)
 	{
 		tputs(tgetstr("us", NULL), 1, ft_putc);
 		ft_putendl(str);
 		tputs(tgetstr("ue", NULL), 1, ft_putc);
+	}
+	else if (mode == SELECT)
+	{
+		tputs(tgetstr("mr", NULL), 1, ft_putc);
+		ft_putendl(str);
+		tputs(tgetstr("me", NULL), 1, ft_putc);
+	}
+	else if (mode == SELECT_HOVER)
+	{
+		tputs(tgetstr("mr", NULL), 1, ft_putc);
+		tputs(tgetstr("us", NULL), 1, ft_putc);
+		ft_putendl(str);
+		tputs(tgetstr("ue", NULL), 1, ft_putc);
+		tputs(tgetstr("me", NULL), 1, ft_putc);
 	}
 	else
 		ft_putendl(str);
@@ -100,13 +114,18 @@ static void	disp_menu(t_list *lst)
 
 static void	ft_move_right(t_list *begin, t_list **cur_elem, t_termcap *tcap)
 {
-	if (((t_elem *)((*cur_elem)->content))->mode == SELECT)
+	if (((t_elem *)((*cur_elem)->content))->mode == HOVER)
 		((t_elem *)((*cur_elem)->content))->mode = NORMAL;
+	else if (((t_elem *)((*cur_elem)->content))->mode == SELECT_HOVER)
+		((t_elem *)((*cur_elem)->content))->mode = SELECT;
 	if ((*cur_elem)->next != NULL)
 		(*cur_elem) = (*cur_elem)->next;
 	else
 		(*cur_elem) = begin;
-	((t_elem *)((*cur_elem)->content))->mode = SELECT;
+	if (((t_elem *)((*cur_elem)->content))->mode != SELECT)
+		((t_elem *)((*cur_elem)->content))->mode = HOVER;
+	else
+		((t_elem *)((*cur_elem)->content))->mode = SELECT_HOVER;
 	clr_screen(tcap);
 	disp_menu(begin);
 }
@@ -114,13 +133,18 @@ static void	ft_move_right(t_list *begin, t_list **cur_elem, t_termcap *tcap)
 static void	ft_move_left(t_list *end, t_list *begin, t_list **cur_elem,
 						t_termcap *tcap)
 {
-	if (((t_elem *)((*cur_elem)->content))->mode == SELECT)
+	if (((t_elem *)((*cur_elem)->content))->mode == HOVER)
 		((t_elem *)((*cur_elem)->content))->mode = NORMAL;
+	else if (((t_elem *)((*cur_elem)->content))->mode == SELECT_HOVER)
+		((t_elem *)((*cur_elem)->content))->mode = SELECT;
 	if (((t_elem *)((*cur_elem)->content))->previous != NULL)
 		(*cur_elem) = ((t_elem *)((*cur_elem)->content))->previous;
 	else
 		(*cur_elem) = end;
-	((t_elem *)((*cur_elem)->content))->mode = SELECT;
+	if (((t_elem *)((*cur_elem)->content))->mode != SELECT)
+		((t_elem *)((*cur_elem)->content))->mode = HOVER;
+	else
+		((t_elem *)((*cur_elem)->content))->mode = SELECT_HOVER;
 	clr_screen(tcap);
 	disp_menu(begin);
 }
@@ -129,6 +153,7 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 {
 	char	buf[3];
 	t_list	*cur_elem;
+	
 
 	cur_elem = begin;
 	while (1)
@@ -148,10 +173,17 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 				break ;
 			}
 		}
+		else if ((unsigned int)(buf[0]) == 10)
+		{
+			((t_elem *)(cur_elem->content))->mode = 
+			(((t_elem *)(cur_elem->content))->mode == SELECT_HOVER) ? HOVER : SELECT_HOVER;
+			clr_screen(tcap);
+			disp_menu(begin);
+		}
 	}
 }
 
-void	init_menu(t_termcap *tcap, char **argv)
+void	init_menu(t_termcap *tcap, char **argv, struct termios *term)
 {
 	t_list	*lst;
 	t_list	*end;
@@ -159,10 +191,18 @@ void	init_menu(t_termcap *tcap, char **argv)
 	lst = NULL;
 	end = fill_list(&lst, argv);
 	clr_screen(tcap);
+	((t_elem *)lst->content)->mode = HOVER;
 	disp_menu(lst);
 	(void)tcap;
 	tputs(tgetstr("ks", NULL), 1, ft_putc);
 	ft_get_user_input(lst, end, tcap);
+
+	//Restore term
+	if (tcgetattr(0, term) == -1)
+	   exit(-1);
+	term->c_lflag = (ICANON | ECHO);
+	if (tcsetattr(0, 0, term) == -1)
+	   exit(-1);
 }
 
 void	init_term(t_termcap *tcap, struct termios *term)
@@ -184,10 +224,11 @@ void	init_term(t_termcap *tcap, struct termios *term)
 	if (tcgetattr(0, term) == -1)
 		exit(-1);
 	term->c_lflag &= ~(ICANON);
-	//term->c_lflag &= ~(ECHO);
+	term->c_lflag &= ~(ECHO);
 	term->c_cc[VMIN] = 1;
 	term->c_cc[VTIME] = 0;
-	tcsetattr(0, 0, term);
+	if (tcsetattr(0, 0, term) == -1)
+	   exit(-1);
 	set_tcap(tcap);
 }
 
@@ -201,7 +242,7 @@ int		main(int argc, char **argv)
 		if (isatty(1))
 		{
 			init_term(&tcap, &term);
-			init_menu(&tcap, argv);
+			init_menu(&tcap, argv, &term);
 		}
 		else
 			ft_putstr("Not a valid terminal type device.\n");
