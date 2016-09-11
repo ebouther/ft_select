@@ -217,6 +217,7 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 		{
 			((t_elem *)(cur_elem->content))->mode = 
 				(((t_elem *)(cur_elem->content))->mode == SELECT_HOVER) ? HOVER : SELECT_HOVER;
+			ft_move_right(begin, &cur_elem, tcap);
 			clr_screen(tcap);
 			disp_menu(begin);
 		}
