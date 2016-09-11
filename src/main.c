@@ -47,6 +47,43 @@ void	ft_print(char *str, enum e_mode mode)
 	ft_putchar_fd('\n', ttyfd);
 }
 
+#include <stdio.h>
+int		del_elem (t_list **begin, t_list **end, t_list **cur_elem)
+{
+	t_list	*tmp;
+
+	tmp = *cur_elem;
+	if ((*cur_elem)->next == NULL
+			&& ((t_elem *)(*cur_elem)->content)->previous == NULL)
+		return (-1);
+	else if ((*cur_elem)->next == NULL)
+	{
+		*end = ((t_elem *)(*cur_elem)->content)->previous;
+		((t_elem *)(*cur_elem)->content)->previous->next = NULL;
+		tmp = *begin;
+	}
+	else if (((t_elem *)(*cur_elem)->content)->previous == NULL)
+	{
+		((t_elem *)(*cur_elem)->next->content)->previous = NULL;
+		tmp = tmp->next;
+		*begin = tmp;
+	}
+	else
+	{
+		((t_elem *)(*cur_elem)->content)->previous->next = (*cur_elem)->next;
+		((t_elem *)(*cur_elem)->next->content)->previous = ((t_elem *)(*cur_elem)->content)->previous;
+		tmp = tmp->next;
+	}
+	free ((void *)(*cur_elem)->content);
+	free ((void *)(*cur_elem));
+	*cur_elem = tmp;
+	if (((t_elem *)(*cur_elem)->content)->mode == SELECT)
+		((t_elem *)(*cur_elem)->content)->mode = SELECT_HOVER;
+	else
+		((t_elem *)(*cur_elem)->content)->mode = HOVER;
+	return (0);
+}
+
 void	put_selected (t_list *begin)
 {
 	int		ttyfd;
@@ -195,7 +232,7 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 	cur_elem = begin;
 	while (1)
 	{
-		tputs(tgetstr("rs", NULL), 1, ft_putc);
+		//tputs(tgetstr("rs", NULL), 1, ft_putc);
 		ft_bzero(buf, sizeof(buf));
 		read(0, buf, sizeof(buf));
 		if ((unsigned int)(buf[0]) == 27)
@@ -204,6 +241,13 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 				ft_move_right(begin, &cur_elem, tcap);
 			else if (((unsigned int)buf[2]) == LEFT_KEY)
 				ft_move_left(end, begin, &cur_elem, tcap);
+			else if (buf[2] == 51)
+			{
+				if (del_elem (&begin, &end, &cur_elem) == -1)
+					break ;
+				clr_screen(tcap);
+				disp_menu(begin);
+			}
 			else if (buf[2] == 0)
 			{
 				ft_quit_menu(begin);
@@ -217,7 +261,7 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 			ft_quit_menu(begin);
 			break ;
 		}
-		else if ((unsigned int)(buf[0]) == SPC_KEY)
+		else if ((unsigned int)(buf[1]) == SPC_KEY)
 		{
 			((t_elem *)(cur_elem->content))->mode = 
 				(((t_elem *)(cur_elem->content))->mode == SELECT_HOVER) ? HOVER : SELECT_HOVER;
@@ -225,6 +269,16 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 			clr_screen(tcap);
 			disp_menu(begin);
 		}
+		else if ((unsigned int)(buf[0]) == BKSPC_KEY)
+		{
+			if (del_elem (&begin, &end, &cur_elem) == -1)
+				break ;
+			clr_screen(tcap);
+			disp_menu(begin);
+		}
+		//dprintf(open("/dev/tty", O_RDWR), "0 : '%d'\n", (unsigned int)(buf[0]));
+		//dprintf(open("/dev/tty", O_RDWR), "0 : '%d'\n", (unsigned int)(buf[1]));
+		//dprintf(open("/dev/tty", O_RDWR), "0 : '%d'\n", (unsigned int)(buf[2]));
 	}
 }
 

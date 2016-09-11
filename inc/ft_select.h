@@ -6,7 +6,7 @@
 /*   By: ebouther <ebouther@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2016/05/28 21:02:12 by ebouther          #+#    #+#             */
-/*   Updated: 2016/09/11 17:24:28 by ebouther         ###   ########.fr       */
+/*   Updated: 2016/09/11 20:06:27 by ebouther         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,6 +22,8 @@
 # define ESC_KEY 87
 # define SPC_KEY 32
 # define RET_KEY 10
+# define DEL_KEY 51
+# define BKSPC_KEY 127
 
 typedef struct		s_termcap
 {
