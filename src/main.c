@@ -121,6 +121,9 @@ t_list	*fill_list(t_list **lst, char **argv)
 	return (end);
 }
 
+/*
+** ve : return cursor to normal
+*/
 static void	ft_quit_menu(t_list *lst)
 {
 	t_list	*tmp;
@@ -134,6 +137,7 @@ static void	ft_quit_menu(t_list *lst)
 		free(tmp);
 		tmp = NULL;
 	}
+	tputs(tgetstr("ve", NULL), 1, ft_putc);
 }
 
 static void	disp_menu(t_list *lst)
@@ -224,6 +228,10 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 	}
 }
 
+/*
+** vi: cursor visibility off
+** ks: keypad start
+*/
 void	init_menu(t_termcap *tcap, char **argv, struct termios *term)
 {
 	t_list	*lst;
@@ -236,6 +244,7 @@ void	init_menu(t_termcap *tcap, char **argv, struct termios *term)
 	disp_menu(lst);
 	(void)tcap;
 	tputs(tgetstr("ks", NULL), 1, ft_putc);
+	tputs(tgetstr("vi", NULL), 1, ft_putc);
 	ft_get_user_input(lst, end, tcap);
 
 	//Restore term
