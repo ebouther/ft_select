@@ -6,7 +6,7 @@
 /*   By: ebouther <ebouther@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2016/05/28 21:02:12 by ebouther          #+#    #+#             */
-/*   Updated: 2016/06/21 16:24:01 by ebouther         ###   ########.fr       */
+/*   Updated: 2016/09/11 17:24:28 by ebouther         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,11 +14,13 @@
 # define FT_SELECT_H
 
 # include <term.h>
+#include <fcntl.h>
 # include "libft.h"
 
 # define LEFT_KEY 68
 # define RIGHT_KEY 67
 # define ESC_KEY 87
+# define SPC_KEY 32
 # define RET_KEY 10
 
 typedef struct		s_termcap

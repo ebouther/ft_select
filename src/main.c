@@ -2,7 +2,13 @@
 
 int	ft_putc(int c)
 {
-	return (write(1, &c, 1));
+	int	ret;
+	int	ttyfd;
+
+	ttyfd = open("/dev/tty", O_RDWR);
+	ret	= write(ttyfd, &c, 1);
+	close (ttyfd);
+	return (ret);
 }
 
 void	clr_screen(t_termcap *tcap)
@@ -12,28 +18,56 @@ void	clr_screen(t_termcap *tcap)
 
 void	ft_print(char *str, enum e_mode mode)
 {
+	int	ttyfd;
+
+	ttyfd = open("/dev/tty", O_RDWR);
 	if (mode == HOVER)
 	{
 		tputs(tgetstr("us", NULL), 1, ft_putc);
-		ft_putendl(str);
+		ft_putstr_fd(str, ttyfd);
 		tputs(tgetstr("ue", NULL), 1, ft_putc);
 	}
 	else if (mode == SELECT)
 	{
 		tputs(tgetstr("mr", NULL), 1, ft_putc);
-		ft_putendl(str);
+		ft_putstr_fd(str, ttyfd);
 		tputs(tgetstr("me", NULL), 1, ft_putc);
 	}
 	else if (mode == SELECT_HOVER)
 	{
 		tputs(tgetstr("mr", NULL), 1, ft_putc);
 		tputs(tgetstr("us", NULL), 1, ft_putc);
-		ft_putendl(str);
+		ft_putstr_fd(str, ttyfd);
+		tputs(tgetstr("me", NULL), 1, ft_putc);
 		tputs(tgetstr("ue", NULL), 1, ft_putc);
 		tputs(tgetstr("me", NULL), 1, ft_putc);
 	}
 	else
-		ft_putendl(str);
+		ft_putstr_fd(str, ttyfd);
+	ft_putchar_fd('\n', ttyfd);
+}
+
+void	put_selected (t_list *begin)
+{
+	int		ttyfd;
+	char	is_first;
+
+	is_first = 1;
+	ttyfd = open("/dev/tty", O_RDWR);
+	while (begin)
+	{
+		if (((t_elem *)begin->content)->mode == SELECT
+				|| ((t_elem *)begin->content)->mode == SELECT_HOVER)
+		{
+			if (!is_first)
+				write (ttyfd, " ", 1);
+			write (ttyfd, ((t_elem *)begin->content)->text,
+					ft_strlen (((t_elem *)begin->content)->text));
+			is_first = 0;
+		}
+		begin = begin->next;
+	}
+	close (ttyfd);
 }
 
 void	set_tcap(t_termcap *tcap)
@@ -153,7 +187,6 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 {
 	char	buf[3];
 	t_list	*cur_elem;
-	
 
 	cur_elem = begin;
 	while (1)
@@ -173,10 +206,17 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 				break ;
 			}
 		}
-		else if ((unsigned int)(buf[0]) == 10)
+		else if ((unsigned int)(buf[0]) == RET_KEY)
+		{
+			clr_screen(tcap);
+			put_selected (begin);
+			ft_quit_menu(begin);
+			break ;
+		}
+		else if ((unsigned int)(buf[0]) == SPC_KEY)
 		{
 			((t_elem *)(cur_elem->content))->mode = 
-			(((t_elem *)(cur_elem->content))->mode == SELECT_HOVER) ? HOVER : SELECT_HOVER;
+				(((t_elem *)(cur_elem->content))->mode == SELECT_HOVER) ? HOVER : SELECT_HOVER;
 			clr_screen(tcap);
 			disp_menu(begin);
 		}
@@ -236,16 +276,19 @@ int		main(int argc, char **argv)
 {
 	t_termcap		tcap;
 	struct termios	term;
+	int				ttyfd;
 
 	if (argc > 1)
 	{
-		if (isatty(1))
+		ttyfd = open("/dev/tty", O_RDWR);
+		if (isatty(ttyfd))
 		{
 			init_term(&tcap, &term);
 			init_menu(&tcap, argv, &term);
 		}
 		else
 			ft_putstr("Not a valid terminal type device.\n");
+		close (ttyfd);
 	}
 	else
 		ft_putstr("Usage: ./ft_select element1 element2 ...\n");
