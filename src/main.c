@@ -1,8 +1,44 @@
 #include "ft_select.h"
 
+t_termcap	*tcap(void)
+{
+    static t_termcap	tcap;
+    return (&tcap);
+}
+
+t_list	**lst(void)
+{
+    static t_list	*lst = NULL;
+    return (&lst);
+}
+
+void	handle_sigtstp ()
+{
+	if (tcsetattr(0, 0, &(tcap()->term)) == -1)
+	   exit(-1);
+	signal(SIGTSTP, SIG_DFL);
+	ioctl(0, TIOCSTI, (char [2]){tcap()->new_term.c_cc[VSUSP], 0});
+}
+
+void	handle_sigcont ()
+{
+	if (tcsetattr(0, 0, &tcap()->new_term) == -1)
+	   exit(-1);
+	clr_screen();
+	disp_menu(*lst());
+	signal(SIGTSTP, sig_handler);
+}
+
 void	sig_handler(int signo)
 {
-	(void)signo;
+	if (signo == SIGCONT)
+		handle_sigcont();
+	else if (signo == SIGTSTP)
+		handle_sigtstp();
+    else if (signo == SIGWINCH)
+		ft_putstr ("RESIZE");
+    else if (signo == SIGINT || signo == SIGTERM)
+		ft_putstr ("QUIT");
 }
 
 int	ft_putc(int c)
@@ -16,9 +52,9 @@ int	ft_putc(int c)
 	return (ret);
 }
 
-void	clr_screen(t_termcap *tcap)
+void	clr_screen(void)
 {
-	tputs(tcap->cl_string, 1, ft_putc);
+	tputs(tcap()->cl_string, 1, ft_putc);
 }
 
 void	ft_print(char *str, enum e_mode mode)
@@ -112,22 +148,22 @@ void	put_selected (t_list *begin)
 	close (ttyfd);
 }
 
-void	set_tcap(t_termcap *tcap)
+void	set_tcap(void)
 {
 	char	*tmp;
 
-	tcap->height = tgetnum("li");
-	tcap->width = tgetnum("co");
-	tcap->cl_string = tgetstr ("cl", 0);
-	tcap->cm_string = tgetstr ("cm", 0);
-	tcap->auto_wrap = tgetflag ("am");
+	tcap()->height = tgetnum("li");
+	tcap()->width = tgetnum("co");
+	tcap()->cl_string = tgetstr ("cl", 0);
+	tcap()->cm_string = tgetstr ("cm", 0);
+	tcap()->auto_wrap = tgetflag ("am");
 	tmp = tgetstr ("pc", 0);
-	tcap->PC = tmp ? *tmp : 0;
-	tcap->BC = tgetstr("le", 0);
-	tcap->UP = tgetstr("up", 0);
+	tcap()->PC = tmp ? *tmp : 0;
+	tcap()->BC = tgetstr("le", 0);
+	tcap()->UP = tgetstr("up", 0);
 }
 
-t_list	*fill_list(t_list **lst, char **argv)
+t_list	*fill_list(char **argv)
 {
 	int		i;
 	char	sw;
@@ -150,7 +186,7 @@ t_list	*fill_list(t_list **lst, char **argv)
 		e.previous = NULL;
 		if (tmp != NULL)
 			previous = tmp;
-		ft_lstadd(lst, tmp = ft_lstnew((void *)&e, sizeof(t_elem)));
+		ft_lstadd(lst(), tmp = ft_lstnew((void *)&e, sizeof(t_elem)));
 		if (sw == 0)
 		{
 			end = tmp;
@@ -158,7 +194,7 @@ t_list	*fill_list(t_list **lst, char **argv)
 		}
 		if (previous != NULL)
 			((t_elem *)(previous->content))->previous = tmp;
-		previous = *lst;
+		previous = *(lst());
 	}
 	return (end);
 }
@@ -182,7 +218,7 @@ static void	ft_quit_menu(t_list *lst)
 	tputs(tgetstr("ve", NULL), 1, ft_putc);
 }
 
-static void	disp_menu(t_list *lst)
+void		disp_menu(t_list *lst)
 {
 	while (lst)
 	{
@@ -192,7 +228,7 @@ static void	disp_menu(t_list *lst)
 	}
 }
 
-static void	ft_move_right(t_list *begin, t_list **cur_elem, t_termcap *tcap)
+static void	ft_move_right(t_list *begin, t_list **cur_elem)
 {
 	if (((t_elem *)((*cur_elem)->content))->mode == HOVER)
 		((t_elem *)((*cur_elem)->content))->mode = NORMAL;
@@ -206,12 +242,11 @@ static void	ft_move_right(t_list *begin, t_list **cur_elem, t_termcap *tcap)
 		((t_elem *)((*cur_elem)->content))->mode = HOVER;
 	else
 		((t_elem *)((*cur_elem)->content))->mode = SELECT_HOVER;
-	clr_screen(tcap);
+	clr_screen();
 	disp_menu(begin);
 }
 
-static void	ft_move_left(t_list *end, t_list *begin, t_list **cur_elem,
-						t_termcap *tcap)
+static void	ft_move_left(t_list *end, t_list *begin, t_list **cur_elem)
 {
 	if (((t_elem *)((*cur_elem)->content))->mode == HOVER)
 		((t_elem *)((*cur_elem)->content))->mode = NORMAL;
@@ -225,11 +260,11 @@ static void	ft_move_left(t_list *end, t_list *begin, t_list **cur_elem,
 		((t_elem *)((*cur_elem)->content))->mode = HOVER;
 	else
 		((t_elem *)((*cur_elem)->content))->mode = SELECT_HOVER;
-	clr_screen(tcap);
+	clr_screen();
 	disp_menu(begin);
 }
 
-static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
+static void	ft_get_user_input(t_list *begin, t_list *end)
 {
 	char	buf[3];
 	t_list	*cur_elem;
@@ -237,21 +272,22 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 	cur_elem = begin;
 	while (1)
 	{
-		signal(SIGTSTP, sig_handler);
+		signal(SIGCONT, sig_handler);
+		signal(SIGCONT, sig_handler);
 
 		ft_bzero(buf, sizeof(buf));
 		read(0, buf, sizeof(buf));
 		if ((unsigned int)(buf[0]) == 27)
 		{
 			if (((unsigned int)buf[2]) == RIGHT_KEY)
-				ft_move_right(begin, &cur_elem, tcap);
+				ft_move_right(begin, &cur_elem);
 			else if (((unsigned int)buf[2]) == LEFT_KEY)
-				ft_move_left(end, begin, &cur_elem, tcap);
+				ft_move_left(end, begin, &cur_elem);
 			else if (buf[2] == 51)
 			{
 				if (del_elem (&begin, &end, &cur_elem) == -1)
 					break ;
-				clr_screen(tcap);
+				clr_screen();
 				disp_menu(begin);
 			}
 			else if (buf[2] == 0)
@@ -262,7 +298,7 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 		}
 		else if ((unsigned int)(buf[0]) == RET_KEY)
 		{
-			clr_screen(tcap);
+			clr_screen();
 			put_selected (begin);
 			ft_quit_menu(begin);
 			break ;
@@ -271,15 +307,15 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 		{
 			((t_elem *)(cur_elem->content))->mode = 
 				(((t_elem *)(cur_elem->content))->mode == SELECT_HOVER) ? HOVER : SELECT_HOVER;
-			ft_move_right(begin, &cur_elem, tcap);
-			clr_screen(tcap);
+			ft_move_right(begin, &cur_elem);
+			clr_screen();
 			disp_menu(begin);
 		}
 		else if ((unsigned int)(buf[0]) == BKSPC_KEY)
 		{
 			if (del_elem (&begin, &end, &cur_elem) == -1)
 				break ;
-			clr_screen(tcap);
+			clr_screen();
 			disp_menu(begin);
 		}
 		//dprintf(open("/dev/tty", O_RDWR), "0 : '%d'\n", (unsigned int)(buf[0]));
@@ -292,30 +328,27 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 ** vi: cursor visibility off
 ** ks: keypad start
 */
-void	init_menu(t_termcap *tcap, char **argv)
+void	init_menu(char **argv)
 {
-	t_list	*lst;
 	t_list	*end;
 
-	lst = NULL;
-	end = fill_list(&lst, argv);
-	clr_screen(tcap);
-	((t_elem *)lst->content)->mode = HOVER;
-	disp_menu(lst);
-	(void)tcap;
+	end = fill_list(argv);
+	clr_screen();
+	((t_elem *)(*lst())->content)->mode = HOVER;
+	disp_menu(*lst());
 	tputs(tgetstr("ks", NULL), 1, ft_putc);
 	tputs(tgetstr("vi", NULL), 1, ft_putc);
-	ft_get_user_input(lst, end, tcap);
+	ft_get_user_input(*lst(), end);
 
 	//Restore term
-	if (tcgetattr(0, &tcap->term) == -1)
-	   exit(-1);
-	tcap->term.c_lflag = (ICANON | ECHO);
-	if (tcsetattr(0, 0, &tcap->term) == -1)
+	//if (tcgetattr(0, &tcap()->term) == -1)
+	//   exit(-1);
+	//tcap()->new_term.c_lflag = (ICANON | ECHO | ISIG);
+	if (tcsetattr(0, 0, &tcap()->term) == -1)
 	   exit(-1);
 }
 
-void	init_term(t_termcap *tcap)
+void	init_term(void)
 {
 	char	*termtype;
 	int		success;
@@ -331,20 +364,21 @@ void	init_term(t_termcap *tcap)
 		ft_printf("Terminal type `%s' is not defined.\n", termtype);
 		exit(-1);
 	}
-	if (tcgetattr(0, &tcap->term) == -1)
+	if (tcgetattr(0, &tcap()->new_term) == -1)
 		exit(-1);
-	tcap->term.c_lflag &= ~(ICANON);
-	tcap->term.c_lflag &= ~(ECHO);
-	tcap->term.c_cc[VMIN] = 1;
-	tcap->term.c_cc[VTIME] = 0;
-	if (tcsetattr(0, 0, &tcap->term) == -1)
+	if (tcgetattr(0, &tcap()->term) == -1)
+		exit(-1);
+	tcap()->new_term.c_lflag &= ~(ICANON);
+	tcap()->new_term.c_lflag &= ~(ECHO);
+	tcap()->new_term.c_cc[VMIN] = 1;
+	tcap()->new_term.c_cc[VTIME] = 0;
+	if (tcsetattr(0, 0, &tcap()->new_term) == -1)
 	   exit(-1);
-	set_tcap(tcap);
+	set_tcap();
 }
 
 int		main(int argc, char **argv)
 {
-	t_termcap		tcap;
 	int				ttyfd;
 
 	if (argc > 1)
@@ -352,8 +386,8 @@ int		main(int argc, char **argv)
 		ttyfd = open("/dev/tty", O_RDWR);
 		if (isatty(ttyfd))
 		{
-			init_term(&tcap);
-			init_menu(&tcap, argv);
+			init_term();
+			init_menu(argv);
 		}
 		else
 			ft_putstr("Not a valid terminal type device.\n");

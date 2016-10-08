@@ -6,7 +6,7 @@
 /*   By: ebouther <ebouther@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2016/05/28 21:02:12 by ebouther          #+#    #+#             */
-/*   Updated: 2016/09/15 21:05:11 by ebouther         ###   ########.fr       */
+/*   Updated: 2016/10/08 20:04:31 by ebouther         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -16,6 +16,7 @@
 # include <term.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <sys/ioctl.h>
 # include "libft.h"
 
 # define LEFT_KEY 68
@@ -55,5 +56,9 @@ typedef struct		s_elem
 	char			*text;
 	enum e_mode		mode;
 }					t_elem;
+
+void	sig_handler(int signo);
+void	clr_screen(void);
+void	disp_menu(t_list *lst);
 
 #endif
