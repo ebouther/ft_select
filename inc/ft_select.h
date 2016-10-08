@@ -6,7 +6,7 @@
 /*   By: ebouther <ebouther@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2016/05/28 21:02:12 by ebouther          #+#    #+#             */
-/*   Updated: 2016/09/11 20:06:27 by ebouther         ###   ########.fr       */
+/*   Updated: 2016/09/15 21:05:11 by ebouther         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -15,6 +15,7 @@
 
 # include <term.h>
 #include <fcntl.h>
+#include <signal.h>
 # include "libft.h"
 
 # define LEFT_KEY 68
@@ -27,6 +28,8 @@
 
 typedef struct		s_termcap
 {
+	struct termios	term;
+	struct termios	new_term;
 	char			*termtype;
 	char			PC;
 	char			*BC;

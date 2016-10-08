@@ -1,5 +1,10 @@
 #include "ft_select.h"
 
+void	sig_handler(int signo)
+{
+	(void)signo;
+}
+
 int	ft_putc(int c)
 {
 	int	ret;
@@ -232,7 +237,8 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 	cur_elem = begin;
 	while (1)
 	{
-		//tputs(tgetstr("rs", NULL), 1, ft_putc);
+		signal(SIGTSTP, sig_handler);
+
 		ft_bzero(buf, sizeof(buf));
 		read(0, buf, sizeof(buf));
 		if ((unsigned int)(buf[0]) == 27)
@@ -261,7 +267,7 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 			ft_quit_menu(begin);
 			break ;
 		}
-		else if ((unsigned int)(buf[1]) == SPC_KEY)
+		else if ((unsigned int)(buf[0]) == SPC_KEY)
 		{
 			((t_elem *)(cur_elem->content))->mode = 
 				(((t_elem *)(cur_elem->content))->mode == SELECT_HOVER) ? HOVER : SELECT_HOVER;
@@ -286,7 +292,7 @@ static void	ft_get_user_input(t_list *begin, t_list *end, t_termcap *tcap)
 ** vi: cursor visibility off
 ** ks: keypad start
 */
-void	init_menu(t_termcap *tcap, char **argv, struct termios *term)
+void	init_menu(t_termcap *tcap, char **argv)
 {
 	t_list	*lst;
 	t_list	*end;
@@ -302,14 +308,14 @@ void	init_menu(t_termcap *tcap, char **argv, struct termios *term)
 	ft_get_user_input(lst, end, tcap);
 
 	//Restore term
-	if (tcgetattr(0, term) == -1)
+	if (tcgetattr(0, &tcap->term) == -1)
 	   exit(-1);
-	term->c_lflag = (ICANON | ECHO);
-	if (tcsetattr(0, 0, term) == -1)
+	tcap->term.c_lflag = (ICANON | ECHO);
+	if (tcsetattr(0, 0, &tcap->term) == -1)
 	   exit(-1);
 }
 
-void	init_term(t_termcap *tcap, struct termios *term)
+void	init_term(t_termcap *tcap)
 {
 	char	*termtype;
 	int		success;
@@ -325,13 +331,13 @@ void	init_term(t_termcap *tcap, struct termios *term)
 		ft_printf("Terminal type `%s' is not defined.\n", termtype);
 		exit(-1);
 	}
-	if (tcgetattr(0, term) == -1)
+	if (tcgetattr(0, &tcap->term) == -1)
 		exit(-1);
-	term->c_lflag &= ~(ICANON);
-	term->c_lflag &= ~(ECHO);
-	term->c_cc[VMIN] = 1;
-	term->c_cc[VTIME] = 0;
-	if (tcsetattr(0, 0, term) == -1)
+	tcap->term.c_lflag &= ~(ICANON);
+	tcap->term.c_lflag &= ~(ECHO);
+	tcap->term.c_cc[VMIN] = 1;
+	tcap->term.c_cc[VTIME] = 0;
+	if (tcsetattr(0, 0, &tcap->term) == -1)
 	   exit(-1);
 	set_tcap(tcap);
 }
@@ -339,7 +345,6 @@ void	init_term(t_termcap *tcap, struct termios *term)
 int		main(int argc, char **argv)
 {
 	t_termcap		tcap;
-	struct termios	term;
 	int				ttyfd;
 
 	if (argc > 1)
@@ -347,8 +352,8 @@ int		main(int argc, char **argv)
 		ttyfd = open("/dev/tty", O_RDWR);
 		if (isatty(ttyfd))
 		{
-			init_term(&tcap, &term);
-			init_menu(&tcap, argv, &term);
+			init_term(&tcap);
+			init_menu(&tcap, argv);
 		}
 		else
 			ft_putstr("Not a valid terminal type device.\n");
