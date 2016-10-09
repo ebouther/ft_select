@@ -12,7 +12,34 @@ t_list	**lst(void)
     return (&lst);
 }
 
-void	handle_sigtstp ()
+int	ft_putc(int c)
+{
+	int	ret;
+	int	ttyfd;
+
+	ttyfd = open("/dev/tty", O_RDWR);
+	ret	= write(ttyfd, &c, 1);
+	close (ttyfd);
+	return (ret);
+}
+
+void	putstr(char *str, int (*putchar)(int c))
+{
+	int	i;
+
+	i = 0;
+	while (str[i])
+		putchar(str[i++]);
+}
+
+void	restore_term(void)
+{
+	if (tcsetattr(0, 0, &tcap()->term) == -1)
+	   exit(-1);
+	putstr("\033[?1049l", ft_putc);
+}
+
+void	handle_sigtstp(void)
 {
 	if (tcsetattr(0, 0, &(tcap()->term)) == -1)
 	   exit(-1);
@@ -20,7 +47,7 @@ void	handle_sigtstp ()
 	ioctl(0, TIOCSTI, (char [2]){tcap()->new_term.c_cc[VSUSP], 0});
 }
 
-void	handle_sigcont ()
+void	handle_sigcont (void)
 {
 	if (tcsetattr(0, 0, &tcap()->new_term) == -1)
 	   exit(-1);
@@ -38,18 +65,10 @@ void	sig_handler(int signo)
     else if (signo == SIGWINCH)
 		ft_putstr ("RESIZE");
     else if (signo == SIGINT || signo == SIGTERM)
-		ft_putstr ("QUIT");
-}
-
-int	ft_putc(int c)
-{
-	int	ret;
-	int	ttyfd;
-
-	ttyfd = open("/dev/tty", O_RDWR);
-	ret	= write(ttyfd, &c, 1);
-	close (ttyfd);
-	return (ret);
+	{
+		restore_term();
+		exit (0);
+	}
 }
 
 void	clr_screen(void)
@@ -264,7 +283,7 @@ static void	ft_move_left(t_list *end, t_list *begin, t_list **cur_elem)
 	disp_menu(begin);
 }
 
-static void	ft_get_user_input(t_list *begin, t_list *end)
+static int	ft_get_user_input(t_list *begin, t_list *end)
 {
 	char	buf[3];
 	t_list	*cur_elem;
@@ -291,17 +310,14 @@ static void	ft_get_user_input(t_list *begin, t_list *end)
 				disp_menu(begin);
 			}
 			else if (buf[2] == 0)
-			{
-				ft_quit_menu(begin);
 				break ;
-			}
 		}
 		else if ((unsigned int)(buf[0]) == RET_KEY)
 		{
 			clr_screen();
+			restore_term();
 			put_selected (begin);
-			ft_quit_menu(begin);
-			break ;
+			return (1);
 		}
 		else if ((unsigned int)(buf[0]) == SPC_KEY)
 		{
@@ -322,6 +338,7 @@ static void	ft_get_user_input(t_list *begin, t_list *end)
 		//dprintf(open("/dev/tty", O_RDWR), "0 : '%d'\n", (unsigned int)(buf[1]));
 		//dprintf(open("/dev/tty", O_RDWR), "0 : '%d'\n", (unsigned int)(buf[2]));
 	}
+	return (0);
 }
 
 /*
@@ -338,14 +355,9 @@ void	init_menu(char **argv)
 	disp_menu(*lst());
 	tputs(tgetstr("ks", NULL), 1, ft_putc);
 	tputs(tgetstr("vi", NULL), 1, ft_putc);
-	ft_get_user_input(*lst(), end);
-
-	//Restore term
-	//if (tcgetattr(0, &tcap()->term) == -1)
-	//   exit(-1);
-	//tcap()->new_term.c_lflag = (ICANON | ECHO | ISIG);
-	if (tcsetattr(0, 0, &tcap()->term) == -1)
-	   exit(-1);
+	if (ft_get_user_input(*lst(), end) != 1)
+		restore_term();
+	ft_quit_menu(*lst());
 }
 
 void	init_term(void)
@@ -370,8 +382,10 @@ void	init_term(void)
 		exit(-1);
 	tcap()->new_term.c_lflag &= ~(ICANON);
 	tcap()->new_term.c_lflag &= ~(ECHO);
+	tcap()->new_term.c_lflag &= ~(ISIG);
 	tcap()->new_term.c_cc[VMIN] = 1;
 	tcap()->new_term.c_cc[VTIME] = 0;
+	putstr("\033[?1049h\033[H", ft_putc);
 	if (tcsetattr(0, 0, &tcap()->new_term) == -1)
 	   exit(-1);
 	set_tcap();
