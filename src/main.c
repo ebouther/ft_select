@@ -1,5 +1,6 @@
 #include "ft_select.h"
 
+#include <stdio.h>
 t_termcap	*tcap(void)
 {
     static t_termcap	tcap;
@@ -41,14 +42,18 @@ void	restore_term(void)
 
 void	handle_sigtstp(void)
 {
-	if (tcsetattr(0, 0, &(tcap()->term)) == -1)
-	   exit(-1);
+	{int fd = open("fifo", O_RDWR);
+	dprintf(fd, "CAUGHT SIGNAL\n");
+	close (fd);}
+	restore_term();
+	ft_putstr("SIGTSTP");
 	signal(SIGTSTP, SIG_DFL);
 	ioctl(0, TIOCSTI, (char [2]){tcap()->new_term.c_cc[VSUSP], 0});
 }
 
 void	handle_sigcont (void)
 {
+	putstr("\033[?1049h\033[H", ft_putc);
 	if (tcsetattr(0, 0, &tcap()->new_term) == -1)
 	   exit(-1);
 	clr_screen();
@@ -105,9 +110,9 @@ void	ft_print(char *str, enum e_mode mode)
 	else
 		ft_putstr_fd(str, ttyfd);
 	ft_putchar_fd('\n', ttyfd);
+	close (ttyfd);
 }
 
-#include <stdio.h>
 int		del_elem (t_list **begin, t_list **end, t_list **cur_elem)
 {
 	t_list	*tmp;
@@ -239,16 +244,23 @@ static void	ft_quit_menu(t_list *lst)
 
 void		disp_menu(t_list *lst)
 {
+	//{int fd = open("fifo", O_RDWR);
+	//dprintf(fd, "DISP\n");
+	//close (fd);}
 	while (lst)
 	{
 		ft_print(((t_elem *)(lst->content))->text,
 			((t_elem *)(lst->content))->mode);
 		lst = lst->next;
 	}
+	//{int fd = open("fifo", O_RDWR);
+	//dprintf(fd, "END DISP\n");
+	//close (fd);}
 }
 
 static void	ft_move_right(t_list *begin, t_list **cur_elem)
 {
+	//dprintf(open("fifo", O_RDWR), "MOVE RIGHT\n");
 	if (((t_elem *)((*cur_elem)->content))->mode == HOVER)
 		((t_elem *)((*cur_elem)->content))->mode = NORMAL;
 	else if (((t_elem *)((*cur_elem)->content))->mode == SELECT_HOVER)
@@ -267,6 +279,7 @@ static void	ft_move_right(t_list *begin, t_list **cur_elem)
 
 static void	ft_move_left(t_list *end, t_list *begin, t_list **cur_elem)
 {
+	//dprintf(open("fifo", O_RDWR), "MOVE LEFT\n");
 	if (((t_elem *)((*cur_elem)->content))->mode == HOVER)
 		((t_elem *)((*cur_elem)->content))->mode = NORMAL;
 	else if (((t_elem *)((*cur_elem)->content))->mode == SELECT_HOVER)
@@ -289,13 +302,14 @@ static int	ft_get_user_input(t_list *begin, t_list *end)
 	t_list	*cur_elem;
 
 	cur_elem = begin;
-	while (1)
+	ft_bzero(buf, sizeof(buf));
+	signal(SIGINT, sig_handler);
+	signal(SIGTERM, sig_handler);
+	signal(SIGWINCH, sig_handler);
+	signal(SIGTSTP, sig_handler);
+	signal(SIGCONT, sig_handler);
+	while (read(0, buf, sizeof(buf)))
 	{
-		signal(SIGCONT, sig_handler);
-		signal(SIGCONT, sig_handler);
-
-		ft_bzero(buf, sizeof(buf));
-		read(0, buf, sizeof(buf));
 		if ((unsigned int)(buf[0]) == 27)
 		{
 			if (((unsigned int)buf[2]) == RIGHT_KEY)
@@ -314,6 +328,7 @@ static int	ft_get_user_input(t_list *begin, t_list *end)
 		}
 		else if ((unsigned int)(buf[0]) == RET_KEY)
 		{
+			//dprintf(open("fifo", O_RDWR), "SPC KEY\n");
 			clr_screen();
 			restore_term();
 			put_selected (begin);
@@ -321,6 +336,7 @@ static int	ft_get_user_input(t_list *begin, t_list *end)
 		}
 		else if ((unsigned int)(buf[0]) == SPC_KEY)
 		{
+			//dprintf(open("fifo", O_RDWR), "SPC KEY\n");
 			((t_elem *)(cur_elem->content))->mode = 
 				(((t_elem *)(cur_elem->content))->mode == SELECT_HOVER) ? HOVER : SELECT_HOVER;
 			ft_move_right(begin, &cur_elem);
@@ -329,6 +345,7 @@ static int	ft_get_user_input(t_list *begin, t_list *end)
 		}
 		else if ((unsigned int)(buf[0]) == BKSPC_KEY)
 		{
+			//dprintf(open("fifo", O_RDWR), "BKSPC KEY\n");
 			if (del_elem (&begin, &end, &cur_elem) == -1)
 				break ;
 			clr_screen();
@@ -337,6 +354,7 @@ static int	ft_get_user_input(t_list *begin, t_list *end)
 		//dprintf(open("/dev/tty", O_RDWR), "0 : '%d'\n", (unsigned int)(buf[0]));
 		//dprintf(open("/dev/tty", O_RDWR), "0 : '%d'\n", (unsigned int)(buf[1]));
 		//dprintf(open("/dev/tty", O_RDWR), "0 : '%d'\n", (unsigned int)(buf[2]));
+		ft_bzero(buf, sizeof(buf));
 	}
 	return (0);
 }
@@ -382,7 +400,6 @@ void	init_term(void)
 		exit(-1);
 	tcap()->new_term.c_lflag &= ~(ICANON);
 	tcap()->new_term.c_lflag &= ~(ECHO);
-	tcap()->new_term.c_lflag &= ~(ISIG);
 	tcap()->new_term.c_cc[VMIN] = 1;
 	tcap()->new_term.c_cc[VTIME] = 0;
 	putstr("\033[?1049h\033[H", ft_putc);
