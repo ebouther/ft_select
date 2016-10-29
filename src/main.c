@@ -45,10 +45,10 @@ void	handle_sigtstp(void)
 	{int fd = open("fifo", O_RDWR);
 	dprintf(fd, "CAUGHT SIGNAL\n");
 	close (fd);}
+	ioctl(0, TIOCSTI,
+		(char [2]){tcap()->new_term.c_cc[VSUSP], 0});
 	restore_term();
-	ft_putstr("SIGTSTP");
 	signal(SIGTSTP, SIG_DFL);
-	ioctl(0, TIOCSTI, (char [2]){tcap()->new_term.c_cc[VSUSP], 0});
 }
 
 void	handle_sigcont (void)
@@ -68,7 +68,12 @@ void	sig_handler(int signo)
 	else if (signo == SIGTSTP)
 		handle_sigtstp();
     else if (signo == SIGWINCH)
-		ft_putstr ("RESIZE");
+	{
+		tcap()->height = tgetnum("li");
+		tcap()->width = tgetnum("co");
+		clr_screen();
+		disp_menu(*lst());
+	}
     else if (signo == SIGINT || signo == SIGTERM)
 	{
 		restore_term();
@@ -81,7 +86,17 @@ void	clr_screen(void)
 	tputs(tcap()->cl_string, 1, ft_putc);
 }
 
-void	ft_print(char *str, enum e_mode mode)
+void	bad_window_size(void)
+{
+	int	ttyfd;
+
+	ttyfd = open("/dev/tty", O_RDWR);
+	clr_screen();
+	ft_putstr_fd("Cannot display list, window is too small.", ttyfd);
+	close(ttyfd);
+}
+
+size_t	ft_print(char *str, enum e_mode mode)
 {
 	int	ttyfd;
 
@@ -111,6 +126,7 @@ void	ft_print(char *str, enum e_mode mode)
 		ft_putstr_fd(str, ttyfd);
 	ft_putchar_fd('\n', ttyfd);
 	close (ttyfd);
+	return ((size_t)ft_strlen(str));
 }
 
 int		del_elem (t_list **begin, t_list **end, t_list **cur_elem)
@@ -239,23 +255,34 @@ static void	ft_quit_menu(t_list *lst)
 		free(tmp);
 		tmp = NULL;
 	}
-	tputs(tgetstr("ve", NULL), 1, ft_putc);
 }
 
 void		disp_menu(t_list *lst)
 {
-	//{int fd = open("fifo", O_RDWR);
-	//dprintf(fd, "DISP\n");
-	//close (fd);}
-	while (lst)
+	int i;
+	size_t	len;
+	size_t	max_col_len;
+
+	i = 0;
+	max_col_len = 0;
+	while (lst && ++i)
 	{
-		ft_print(((t_elem *)(lst->content))->text,
-			((t_elem *)(lst->content))->mode);
+		if ((len = ft_print(((t_elem *)(lst->content))->text,
+				((t_elem *)(lst->content))->mode)) > max_col_len)
+			max_col_len = len;
+		if (i > tcap()->height)
+		{
+			if (max_col_len + 4 > (size_t)tcap()->width)
+				break ;
+			tputs(tgoto(tcap()->cm_string,
+						tcap()->height,
+						max_col_len + 4), 1, ft_putc);
+
+		}
 		lst = lst->next;
 	}
-	//{int fd = open("fifo", O_RDWR);
-	//dprintf(fd, "END DISP\n");
-	//close (fd);}
+	if (lst != NULL)
+		bad_window_size();
 }
 
 static void	ft_move_right(t_list *begin, t_list **cur_elem)
